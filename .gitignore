@@ -1,0 +1,10 @@
+modules/addressfield/
+modules/commerce/
+modules/commerce_nab_transact/
+modules/commerce_node_checkout/
+modules/ctools/
+modules/entity/
+modules/references/
+modules/rules/
+modules/views/
+sellyastuff.komodoproject

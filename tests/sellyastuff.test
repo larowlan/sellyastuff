@@ -1,0 +1,122 @@
+<?php
+/**
+ * @file
+ * Provides tests for sell ya stuff checkout process.
+ */
+
+/**
+ * Test class.
+ */
+class SellYaStuffTests extends DrupalWebTestCase {
+  /**
+   * Declare the profile to use.
+   * @var string $profile
+   */
+  public $profile = 'sellyastuff';
+
+  /**
+   * Implementation of getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Sell ya stuff checkout process',
+      'description' => 'Test that anonymous users can create published content by completing checkout.',
+      'group' => 'Sell Ya Stuff',
+    );
+  }
+
+  /**
+   * Implementation of setUp().
+   */
+  function setUp() {
+    parent::setUp(array(
+      'commerce_order_ui'
+    ));
+
+    // User creation for different operations.
+    $admin_permissions = array(
+      // Access admin/content/node.
+      'access content overview',
+      'administer nodes',
+      // Access the order administration pages.
+      'view any commerce_order entity',
+      // Administer order.
+      'administer commerce_order entities'
+    );
+    $this->admin = $this->drupalCreateUser($admin_permissions);
+  }
+
+  /**
+   * Test anonymous users can create content after payment.
+   */
+  function testAnonymousPublishing() {
+    // We're not logged in here - so as anonymous - head to node/add/page.
+    $this->drupalGet('node/add/page');
+    // Check the response was 200 'OK'.
+    $this->assertResponse('200', 'Anonymous users can access node creation form for page content type');
+    $edit = array(
+      'title' => 'Miniature pony',
+      'body[und][0][value]' => 'A lovely 3yo miniature pony named rainbow sparkles'
+    );
+    // Save the node by posting to the current url.
+    $this->drupalPost(NULL, $edit, t('Save'));
+    // Assert we get the required messages.
+    $this->assertText('Basic page Miniature pony has been created', 'Created the page');
+    $this->assertText('Standard listing added to your cart', 'Listing item added to cart');
+    // Make sure we were redirected.
+    $matches = array();
+    preg_match('/checkout\/([0-9]+)/', $this->getUrl(), $matches);
+    $this->assertTrue(count($matches) == 2, 'User redirected to checkout');
+
+    // Make sure the node isn't published.
+    $node = node_load(1);
+    $this->assertFalse((bool) $node->status, 'The node is not published');
+
+    // Now we complete checkout form.
+    $edit = array(
+      'account[login][mail]' => 'joe.bloggs@example.com',
+      'customer_profile_billing[commerce_customer_address][und][0][name_line]' => 'Joe Bloggs',
+      'customer_profile_billing[commerce_customer_address][und][0][country]' => 'AU',
+      'customer_profile_billing[commerce_customer_address][und][0][thoroughfare]' => '1 Some St',
+      'customer_profile_billing[commerce_customer_address][und][0][locality]' => 'Somewhere',
+      'customer_profile_billing[commerce_customer_address][und][0][administrative_area]' => 'QLD',
+      'customer_profile_billing[commerce_customer_address][und][0][postal_code]' => '1234'
+    );
+
+    $this->drupalPost(NULL, $edit, t('Continue to next step'));
+
+    $edit = array(
+      'commerce_payment[payment_method]' => 'nab_transact|sell_ya_stuff_payment',
+      'commerce_payment[payment_details][credit_card][number]' => '4111111111111111',
+      'commerce_payment[payment_details][credit_card][exp_month]' => '05',
+      'commerce_payment[payment_details][credit_card][exp_year]' => '2032',
+      'commerce_payment[payment_details][credit_card][code]' => '123'
+    );
+
+    $this->drupalPost(NULL, $edit, t('Continue to next step'));
+
+    // Check order is complete.
+    $this->assertRaw('Checkout complete', 'Checkout was completed');
+    $this->assertRaw(format_string("Your order is number @id", array(
+      '@id' => !empty($matches[1]) ? $matches[1] : 'N/A'
+    )));
+
+    // Login as admin.
+    $this->drupalLogin($this->admin);
+    $this->drupalGet('admin/content/node');
+
+    // Check for the node and published status.
+    $this->assertRaw('Miniature pony', 'Found miniature pony node');
+    $this->assertRaw('published', 'Node is published');
+
+    // Load the node and see if its published (be sure to pass $reset = TRUE).
+    $node = node_load(1, NULL, TRUE);
+    $this->assertTrue((bool) $node->status, 'The node is now published');
+
+    // Go to the order admin page and make sure the user details are found.
+    $this->drupalGet('admin/commerce/orders/' . $matches[1] . '/view');
+    $this->assertResponse(200, 'Order admin page was found');
+    $this->assertText('$30.00', 'Order value of $30.00 was found');
+    $this->assertText('Joe Bloggs', 'Joe Bloggs was associated with the order.');
+  }
+}
