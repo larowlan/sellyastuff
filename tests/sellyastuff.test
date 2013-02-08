@@ -28,7 +28,7 @@ class SellYaStuffTests extends DrupalWebTestCase {
   /**
    * Implementation of setUp().
    */
-  function setUp() {
+  public function setUp() {
     parent::setUp(array(
       'commerce_order_ui'
     ));
@@ -49,20 +49,25 @@ class SellYaStuffTests extends DrupalWebTestCase {
   /**
    * Test anonymous users can create content after payment.
    */
-  function testAnonymousPublishing() {
+  public function testAnonymousPublishing() {
     // We're not logged in here - so as anonymous - head to node/add/page.
     $this->drupalGet('node/add/page');
+
     // Check the response was 200 'OK'.
     $this->assertResponse('200', 'Anonymous users can access node creation form for page content type');
+    $langcode = LANGUAGE_NONE;
     $edit = array(
       'title' => 'Miniature pony',
-      'body[und][0][value]' => 'A lovely 3yo miniature pony named rainbow sparkles'
+      "body[$langcode][0][value]" => 'A lovely 3yo miniature pony named rainbow sparkles'
     );
+
     // Save the node by posting to the current url.
     $this->drupalPost(NULL, $edit, t('Save'));
+
     // Assert we get the required messages.
     $this->assertText('Basic page Miniature pony has been created', 'Created the page');
     $this->assertText('Standard listing added to your cart', 'Listing item added to cart');
+
     // Make sure we were redirected.
     $matches = array();
     preg_match('/checkout\/([0-9]+)/', $this->getUrl(), $matches);
@@ -75,16 +80,18 @@ class SellYaStuffTests extends DrupalWebTestCase {
     // Now we complete checkout form.
     $edit = array(
       'account[login][mail]' => 'joe.bloggs@example.com',
-      'customer_profile_billing[commerce_customer_address][und][0][name_line]' => 'Joe Bloggs',
-      'customer_profile_billing[commerce_customer_address][und][0][country]' => 'AU',
-      'customer_profile_billing[commerce_customer_address][und][0][thoroughfare]' => '1 Some St',
-      'customer_profile_billing[commerce_customer_address][und][0][locality]' => 'Somewhere',
-      'customer_profile_billing[commerce_customer_address][und][0][administrative_area]' => 'QLD',
-      'customer_profile_billing[commerce_customer_address][und][0][postal_code]' => '1234'
+      "customer_profile_billing[commerce_customer_address][$langcode][0][name_line]" => 'Joe Bloggs',
+      "customer_profile_billing[commerce_customer_address][$langcode][0][country]" => 'AU',
+      "customer_profile_billing[commerce_customer_address][$langcode][0][thoroughfare]" => '1 Some St',
+      "customer_profile_billing[commerce_customer_address][$langcode][0][locality]" => 'Somewhere',
+      "customer_profile_billing[commerce_customer_address][$langcode][0][administrative_area]" => 'QLD',
+      "customer_profile_billing[commerce_customer_address][$langcode][0][postal_code]" => '1234'
     );
 
+    // Submit and go to next step.
     $this->drupalPost(NULL, $edit, t('Continue to next step'));
 
+    // Now complete the payment step.
     $edit = array(
       'commerce_payment[payment_method]' => 'nab_transact|sell_ya_stuff_payment',
       'commerce_payment[payment_details][credit_card][number]' => '4111111111111111',
@@ -93,6 +100,7 @@ class SellYaStuffTests extends DrupalWebTestCase {
       'commerce_payment[payment_details][credit_card][code]' => '123'
     );
 
+    // This is actual the complete payment step (the default text).
     $this->drupalPost(NULL, $edit, t('Continue to next step'));
 
     // Check order is complete.
@@ -106,7 +114,7 @@ class SellYaStuffTests extends DrupalWebTestCase {
     $this->drupalGet('admin/content/node');
 
     // Check for the node and published status.
-    $this->assertRaw('Miniature pony', 'Found miniature pony node');
+    $this->assertRaw('Miniature pony', 'Fo$langcode miniature pony node');
     $this->assertRaw('published', 'Node is published');
 
     // Load the node and see if its published (be sure to pass $reset = TRUE).
